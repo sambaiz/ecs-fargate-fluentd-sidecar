@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  BucketName:
+    Type: String
+    Default: 'my-test-logs-bbbbbb'
+  RepositoryName:
+    Type: String
+    Default: 'test-ecs-log'
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: 'test-cluster'
+  Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+  ExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'test-execution-role'
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 
+              - 'sts:AssumeRole'
+      Policies: 
+        - PolicyName: 'test-execution-role'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+  TaskRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'test-task-role'
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 
+              - 'sts:AssumeRole'
+      Policies: 
+        - PolicyName: 'test-task-role'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: 'Allow'
+                Action: 's3:ListBucket'
+                Resource: !GetAtt Bucket.Arn
+              - Effect: 'Allow'
+                Action: 's3:PutObject'
+                Resource: !Join [ '/', [ !GetAtt Bucket.Arn, '*' ] ]
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: 'test-log-group'
+      RetentionInDays: 1
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      RequiresCompatibilities:
+        - 'EC2'
+        - 'FARGATE'
+      NetworkMode: 'awsvpc'
+      Cpu: '256'
+      Memory: '512'
+      ContainerDefinitions: 
+        - Name: 'app'
+          Image: 'busybox'
+          EntryPoint: 
+            - 'sh'
+            - '-c'
+          Command: 
+            - 'while true; do echo "{\"foo\":1000,\"bar\":\"aaa\"}" >> /var/log/test.log; sleep 1; done'
+          Essential: 'true'
+          MountPoints: 
+            - SourceVolume: "varlog"
+              ContainerPath: "/var/log"
+      Volumes: 
+        - Name: 'varlog'
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref TaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: 
+            - !Ref Subnet
+      ServiceName: 'test-service'
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.32.0.0/24
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 172.32.0.0/24
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties: 
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+                {
+                    "rulePriority": 10,
+                    "selection": {
+                        "tagStatus": "untagged",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 50
+                    },
+                    "action": {
+                        "type": "expire"
+                    }
+                }
+            ]
+          }
+      RepositoryName: !Ref RepositoryName

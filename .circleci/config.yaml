@@ -1,0 +1,22 @@
+version: 2.1
+orbs:
+  aws-ecr: circleci/aws-ecr@3.1.0
+  slack: circleci/slack@2.3.0
+
+executors:
+  default:
+    machine: true
+    environment:
+      ECR_REPO: 'test-ecs-log'
+      AWS_ECR_ACCOUNT_URL: '<account_id>.dkr.ecr.<region>.amazonaws.com'
+      AWS_REGION: 'ap-northeast-1'
+      CLUSTER_NAME: 'test-cluster'
+
+workflows:
+  build-push:
+    jobs:
+      - aws-ecr/build_and_push_image:
+          name: 'build-latest'
+          executor: default
+          repo: '${ECR_REPO}'
+          tag: latest
