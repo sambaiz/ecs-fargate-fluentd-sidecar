@@ -1,7 +1,7 @@
 
-## replace your settings
+- replace your settings
 
 ```
-sed -i '' 's/<account_id>/your_account_id/g' cfn.yaml
-sed -i '' 's/<account_id>/your_account_id/g' .circleci/config.yaml
+sed -i '' 's/<your_account_id>/1234567890/g' cfn.yaml
+sed -i '' 's/<your_account_id>/1234567890/g' .circleci/config.yml
 ```
