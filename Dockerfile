@@ -13,10 +13,3 @@ RUN apk add --update --virtual .build-deps \
     && apk del .build-deps \
     && rm -rf /var/cache/apk/* \
     /home/fluent/.gem/ruby/*/cache/*.gem
-
-# set timezone (Alpine)
-RUN apk --update add tzdata && \
-    cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
-    apk del tzdata && \
-    rm -rf /var/cache/apk/* && \
-    date
