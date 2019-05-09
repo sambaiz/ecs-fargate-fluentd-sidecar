@@ -6,6 +6,9 @@ Parameters:
   RepositoryName:
     Type: String
     Default: 'test-ecs-log'
+  Subnets:
+    Type: List<String>
+  
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -13,7 +16,7 @@ Resources:
       ClusterName: 'test-cluster'
   Bucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
+    # DeletionPolicy: Retain
     Properties:
       BucketName: !Ref BucketName
   ExecutionRole:
@@ -77,6 +80,8 @@ Resources:
         - 'EC2'
         - 'FARGATE'
       NetworkMode: 'awsvpc'
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn : !Ref TaskRole
       Cpu: '256'
       Memory: '512'
       ContainerDefinitions: 
@@ -87,6 +92,12 @@ Resources:
             - '-c'
           Command: 
             - 'while true; do echo "{\"foo\":1000,\"bar\":\"aaa\"}" >> /var/log/test.log; sleep 1; done'
+          Essential: 'true'
+          MountPoints: 
+            - SourceVolume: "varlog"
+              ContainerPath: "/var/log"
+        - Name: 'fluentd'
+          Image: !Join [ '/', [ '<account_id>.dkr.ecr.ap-northeast-1.amazonaws.com', !Ref Repository ] ]
           Essential: 'true'
           MountPoints: 
             - SourceVolume: "varlog"
@@ -102,25 +113,10 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          Subnets: 
-            - !Ref Subnet
+          # If private subnet is placed, set 'DISABLED' to pull images
+          AssignPublicIp: 'ENABLED'
+          Subnets: !Ref Subnets
       ServiceName: 'test-service'
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 172.32.0.0/24
-  Subnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 172.32.0.0/24
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-  GatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
   Repository:
     Type: AWS::ECR::Repository
     Properties: 
